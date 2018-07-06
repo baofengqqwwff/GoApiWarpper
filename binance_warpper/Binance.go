@@ -1,4 +1,4 @@
-package binance
+package BinanceWarpper
 
 import (
 	"encoding/json"
@@ -11,18 +11,20 @@ import (
 	"github.com/nntaoli-project/GoEx"
 )
 type Binance struct {
-	binance *binance.Binance
+	*binance.Binance
 }
 
-func New(client *http.Client, api_key, secret_key string) *binance.Binance {
-	return &binance.Binance{api_key, secret_key,client}
+func New(client *http.Client, api_key, secret_key string) *Binance {
+	binance := &Binance{}
+	binance.Binance =  &Binance{api_key, secret_key,client}
+	return binance
 }
 
 func (bn *Binance) GetExchangeName() string {
 	return bn.Binance.GetExchangeName()
 }
 
-func (bn *Binance) GetTicker(currency goex.CurrencyPair) (*goex.Ticker, error) {
+func (bn *Binance) GetTicker(currency string) (*goex.Ticker, error) {
 
 	return bn.Binance.GetTicker(currency)
 }
