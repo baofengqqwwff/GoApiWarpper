@@ -1,4 +1,4 @@
-package goex
+package GoApiWarpper
 
 type FutureRestAPI interface {
 	/**

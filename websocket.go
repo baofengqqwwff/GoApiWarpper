@@ -1,4 +1,4 @@
-package goex
+package GoApiWarpper
 
 import (
 	"github.com/gorilla/websocket"

@@ -1,4 +1,4 @@
-package huobi
+package huobi_warpper
 
 import (
 	"github.com/nntaoli-project/GoEx"

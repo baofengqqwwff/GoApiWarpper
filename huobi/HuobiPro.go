@@ -1,4 +1,4 @@
-package huobi
+package huobi_warpper
 
 import (
 	"bytes"
@@ -13,8 +13,8 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
+	"github.com/nntaoli-project/GoEx/huobi"
 )
 
 var HBPOINT = NewCurrency("HBPOINT", "")
@@ -31,26 +31,13 @@ type AccountInfo struct {
 }
 
 type HuoBiPro struct {
-	httpClient        *http.Client
-	baseUrl           string
-	accountId         string
-	accessKey         string
-	secretKey         string
-	ws                *WsConn
-	createWsLock      sync.Mutex
-	wsTickerHandleMap map[string]func(*Ticker)
-	wsDepthHandleMap  map[string]func(*Depth)
+	*huobi.HuoBiPro
 }
 
 func NewHuoBiPro(client *http.Client, apikey, secretkey, accountId string) *HuoBiPro {
-	hbpro := new(HuoBiPro)
-	hbpro.baseUrl = "https://api.huobi.br.com"
-	hbpro.httpClient = client
-	hbpro.accessKey = apikey
-	hbpro.secretKey = secretkey
-	hbpro.accountId = accountId
-	hbpro.wsDepthHandleMap = make(map[string]func(*Depth))
-	hbpro.wsTickerHandleMap = make(map[string]func(*Ticker))
+	hbpro := &HuoBiPro{}
+	hbpro.HuoBiPro = huobi.NewHuoBiPro(client, apikey, secretkey, accountId)
+
 	return hbpro
 }
 
@@ -58,117 +45,49 @@ func NewHuoBiPro(client *http.Client, apikey, secretkey, accountId string) *HuoB
  *现货交易
  */
 func NewHuoBiProSpot(client *http.Client, apikey, secretkey string) *HuoBiPro {
-	hb := NewHuoBiPro(client, apikey, secretkey, "")
-	accinfo, err := hb.GetAccountInfo(HB_SPOT_ACCOUNT)
-	if err != nil {
-		panic(err)
-	}
-	hb.accountId = accinfo.Id
-	log.Println("account state :", accinfo.State)
-	return hb
+
+	hbpro := &HuoBiPro{}
+	hbpro.HuoBiPro = huobi.NewHuoBiProSpot(client, apikey, secretkey)
+
+	return hbpro
 }
 
 /**
  * 点卡账户
  */
 func NewHuoBiProPoint(client *http.Client, apikey, secretkey string) *HuoBiPro {
-	hb := NewHuoBiPro(client, apikey, secretkey, "")
-	accinfo, err := hb.GetAccountInfo(HB_POINT_ACCOUNT)
-	if err != nil {
-		panic(err)
-	}
-	hb.accountId = accinfo.Id
-	log.Println("account state :", accinfo.State)
-	return hb
+	hbpro := &HuoBiPro{}
+	hbpro.HuoBiPro = huobi.NewHuoBiProPoint(client, apikey, secretkey)
+
+	return hbpro
 }
 
-func (hbpro *HuoBiPro) GetAccountInfo(acc string) (AccountInfo, error) {
-	path := "/v1/account/accounts"
-	params := &url.Values{}
-	hbpro.buildPostForm("GET", path, params)
-
-	//log.Println(hbpro.baseUrl + path + "?" + params.Encode())
-
-	respmap, err := HttpGet(hbpro.httpClient, hbpro.baseUrl+path+"?"+params.Encode())
-	if err != nil {
-		return AccountInfo{}, err
-	}
-	//log.Println(respmap)
-	if respmap["status"].(string) != "ok" {
-		return AccountInfo{}, errors.New(respmap["err-code"].(string))
-	}
-
-	var info AccountInfo
-
-	data := respmap["data"].([]interface{})
-	for _, v := range data {
-		iddata := v.(map[string]interface{})
-		if iddata["type"].(string) == acc {
-			info.Id = fmt.Sprintf("%.0f", iddata["id"])
-			info.Type = acc
-			info.State = iddata["state"].(string)
-			break
-		}
-	}
-	//log.Println(respmap)
-	return info, nil
-}
-
-func (hbpro *HuoBiPro) GetAccount() (*Account, error) {
-	path := fmt.Sprintf("/v1/account/accounts/%s/balance", hbpro.accountId)
-	params := &url.Values{}
-	params.Set("accountId-id", hbpro.accountId)
-	hbpro.buildPostForm("GET", path, params)
-
-	urlStr := hbpro.baseUrl + path + "?" + params.Encode()
-	//println(urlStr)
-	respmap, err := HttpGet(hbpro.httpClient, urlStr)
-
+func (hbpro *HuoBiPro) GetAccountInfo(acc string) (*AccountInfo, error) {
+	goexAccountInfo, err := hbpro.HuoBiPro.GetAccountInfo(acc)
 	if err != nil {
 		return nil, err
 	}
-
-	//log.Println(respmap)
-
-	if respmap["status"].(string) != "ok" {
-		return nil, errors.New(respmap["err-code"].(string))
+	goexjson, _ := json.Marshal(goexAccountInfo)
+	accountInfo := &AccountInfo{}
+	err = json.Unmarshal(goexjson, accountInfo)
+	if err != nil {
+		return nil, err
 	}
+	return accountInfo, nil
+}
 
-	datamap := respmap["data"].(map[string]interface{})
-	if datamap["state"].(string) != "working" {
-		return nil, errors.New(datamap["state"].(string))
+func (hbpro *HuoBiPro) GetAccount() (*Account, error) {
+	goexAccountInfo, err := hbpro.HuoBiPro.GetAccount()
+	if err != nil {
+		return nil, err
 	}
-
-	list := datamap["list"].([]interface{})
-	acc := new(Account)
-	acc.SubAccounts = make(map[Currency]SubAccount, 6)
-	acc.Exchange = hbpro.GetExchangeName()
-
-	subAccMap := make(map[Currency]*SubAccount)
-
-	for _, v := range list {
-		balancemap := v.(map[string]interface{})
-		currencySymbol := balancemap["currency"].(string)
-		currency := NewCurrency(currencySymbol, "")
-		typeStr := balancemap["type"].(string)
-		balance := ToFloat64(balancemap["balance"])
-		if subAccMap[currency] == nil {
-			subAccMap[currency] = new(SubAccount)
-		}
-		subAccMap[currency].Currency = currency
-		switch typeStr {
-		case "trade":
-			subAccMap[currency].Amount = balance
-		case "frozen":
-			subAccMap[currency].ForzenAmount = balance
-		}
+	goexjson, _ := json.Marshal(goexAccountInfo)
+	accountInfo := &Account{}
+	err = json.Unmarshal(goexjson, accountInfo)
+	if err != nil {
+		return nil, err
 	}
-
-	for k, v := range subAccMap {
-		acc.SubAccounts[k] = *v
-	}
-
-	return acc, nil
+	return accountInfo, nil
 }
 
 func (hbpro *HuoBiPro) placeOrder(amount, price string, pair CurrencyPair, orderType string) (string, error) {
