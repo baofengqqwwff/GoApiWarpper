@@ -1,58 +1,28 @@
 package main
 
 import (
-	"fmt"
-	"reflect"
-	"encoding/json"
+	"net/http"
 	"log"
+	"time"
+		"sync"
+	"os"
+	"github.com/baofengqqwwff/GoApiWarpper/huobi_warpper"
+	. "github.com/baofengqqwwff/GoApiWarpper"
 )
 
-type Student struct {
-	Name  string
-	Age   int
-	Score float32
-}
-
-type Student2 struct {
-	Name  string
-	Age   int
-	Score float32
-}
-
-func test(b interface{}) {
-	t := reflect.TypeOf(b)
-	fmt.Println(t)
-
-	v := reflect.ValueOf(b)
-	fmt.Println(v)
-
-	k := v.Kind()
-	fmt.Println(k)
-
-
-	iv := v.Interface()
-	fmt.Println(iv)
-
-
-	stu, ok := iv.(Student)
-	if ok {
-		fmt.Printf("%v %T\n", stu, stu)
-	}
-	stu2 := &Student2{}
-	jsons, _ := json.Marshal(b) //转换成JSON返回的是byte[]
-	json.Unmarshal(jsons,stu2)
-	log.Println(stu2)
-}
-
 func main() {
-	var a Student = Student{
-		Name:  "stu01",
-		Age:   18,
-		Score: 92,
-	}
-	//test(a)
-	stu2 := &Student2{}
-	jsons, _ := json.Marshal(a) //转换成JSON返回的是byte[]
-	json.Unmarshal(jsons,stu2)
-	log.Println(stu2)
+	os.Setenv("https_proxy" , "socks5://127.0.0.1:1080")
+
+	huobipro := huobi_warpper.NewHuoBiPro(http.DefaultClient, "", "", "")
+	huobipro.GetDepthWithWs(NewCurrencyPair2("btc_usdt"), func(depth *Depth) {
+		log.Println(depth)
+	})
+	log.Println("启动成功")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		time.Sleep(time.Minute)
+		wg.Done()
+	}()
+	wg.Wait()
 }

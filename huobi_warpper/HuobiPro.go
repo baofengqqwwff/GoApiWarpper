@@ -1,20 +1,11 @@
 package huobi_warpper
 
 import (
-	"bytes"
-	"compress/gzip"
 	"encoding/json"
-	"errors"
-	"fmt"
-	. "github.com/nntaoli-project/GoEx"
-	"io/ioutil"
-	"log"
+	. "github.com/baofengqqwwff/GoApiWarpper"
 	"net/http"
-	"net/url"
-	"sort"
-	"strings"
-	"time"
 	"github.com/nntaoli-project/GoEx/huobi"
+	"github.com/nntaoli-project/GoEx"
 )
 
 var HBPOINT = NewCurrency("HBPOINT", "")
@@ -90,329 +81,134 @@ func (hbpro *HuoBiPro) GetAccount() (*Account, error) {
 	return accountInfo, nil
 }
 
-func (hbpro *HuoBiPro) placeOrder(amount, price string, pair CurrencyPair, orderType string) (string, error) {
-	path := "/v1/order/orders/place"
-	params := url.Values{}
-	params.Set("account-id", hbpro.accountId)
-	params.Set("amount", amount)
-	params.Set("symbol", strings.ToLower(pair.ToSymbol("")))
-	params.Set("type", orderType)
-
-	switch orderType {
-	case "buy-limit", "sell-limit":
-		params.Set("price", price)
-	}
-
-	hbpro.buildPostForm("POST", path, &params)
-
-	resp, err := HttpPostForm3(hbpro.httpClient, hbpro.baseUrl+path+"?"+params.Encode(), hbpro.toJson(params),
-		map[string]string{"Content-Type": "application/json", "Accept-Language": "zh-cn"})
-	if err != nil {
-		return "", err
-	}
-
-	respmap := make(map[string]interface{})
-	err = json.Unmarshal(resp, &respmap)
-	if err != nil {
-		return "", err
-	}
-
-	if respmap["status"].(string) != "ok" {
-		return "", errors.New(respmap["err-code"].(string))
-	}
-
-	return respmap["data"].(string), nil
-}
-
-func (hbpro *HuoBiPro) LimitBuy(amount, price string, currency CurrencyPair) (*Order, error) {
-	orderId, err := hbpro.placeOrder(amount, price, currency, "buy-limit")
+func (hbpro *HuoBiPro) LimitBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.LimitBuy(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
-	return &Order{
-		Currency: currency,
-		OrderID:  ToInt(orderId),
-		OrderID2: orderId,
-		Amount:   ToFloat64(amount),
-		Price:    ToFloat64(price),
-		Side:     BUY}, nil
-}
-
-func (hbpro *HuoBiPro) LimitSell(amount, price string, currency CurrencyPair) (*Order, error) {
-	orderId, err := hbpro.placeOrder(amount, price, currency, "sell-limit")
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
 	if err != nil {
 		return nil, err
 	}
-	return &Order{
-		Currency: currency,
-		OrderID:  ToInt(orderId),
-		OrderID2: orderId,
-		Amount:   ToFloat64(amount),
-		Price:    ToFloat64(price),
-		Side:     SELL}, nil
+	return order, nil
 }
 
-func (hbpro *HuoBiPro) MarketBuy(amount, price string, currency CurrencyPair) (*Order, error) {
-	orderId, err := hbpro.placeOrder(amount, price, currency, "buy-market")
+func (hbpro *HuoBiPro) LimitSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.LimitSell(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
-	return &Order{
-		Currency: currency,
-		OrderID:  ToInt(orderId),
-		OrderID2: orderId,
-		Amount:   ToFloat64(amount),
-		Price:    ToFloat64(price),
-		Side:     BUY_MARKET}, nil
-}
-
-func (hbpro *HuoBiPro) MarketSell(amount, price string, currency CurrencyPair) (*Order, error) {
-	orderId, err := hbpro.placeOrder(amount, price, currency, "sell-market")
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
 	if err != nil {
 		return nil, err
 	}
-	return &Order{
-		Currency: currency,
-		OrderID:  ToInt(orderId),
-		OrderID2: orderId,
-		Amount:   ToFloat64(amount),
-		Price:    ToFloat64(price),
-		Side:     SELL_MARKET}, nil
+	return order, nil
 }
 
-func (hbpro *HuoBiPro) parseOrder(ordmap map[string]interface{}) Order {
-	ord := Order{
-		OrderID:    ToInt(ordmap["id"]),
-		OrderID2:   fmt.Sprint(ToInt(ordmap["id"])),
-		Amount:     ToFloat64(ordmap["amount"]),
-		Price:      ToFloat64(ordmap["price"]),
-		DealAmount: ToFloat64(ordmap["field-amount"]),
-		Fee:        ToFloat64(ordmap["field-fees"]),
-		OrderTime:  ToInt(ordmap["created-at"]),
-	}
-
-	state := ordmap["state"].(string)
-	switch state {
-	case "submitted", "pre-submitted":
-		ord.Status = ORDER_UNFINISH
-	case "filled":
-		ord.Status = ORDER_FINISH
-	case "partial-filled":
-		ord.Status = ORDER_PART_FINISH
-	case "canceled", "partial-canceled":
-		ord.Status = ORDER_CANCEL
-	default:
-		ord.Status = ORDER_UNFINISH
-	}
-
-	if ord.DealAmount > 0.0 {
-		ord.AvgPrice = ToFloat64(ordmap["field-cash-amount"]) / ord.DealAmount
-	}
-
-	typeS := ordmap["type"].(string)
-	switch typeS {
-	case "buy-limit":
-		ord.Side = BUY
-	case "buy-market":
-		ord.Side = BUY_MARKET
-	case "sell-limit":
-		ord.Side = SELL
-	case "sell-market":
-		ord.Side = SELL_MARKET
-	}
-	return ord
-}
-
-func (hbpro *HuoBiPro) GetOneOrder(orderId string, currency CurrencyPair) (*Order, error) {
-	path := "/v1/order/orders/" + orderId
-	params := url.Values{}
-	hbpro.buildPostForm("GET", path, &params)
-	respmap, err := HttpGet(hbpro.httpClient, hbpro.baseUrl+path+"?"+params.Encode())
+func (hbpro *HuoBiPro) MarketBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.MarketBuy(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
-
-	if respmap["status"].(string) != "ok" {
-		return nil, errors.New(respmap["err-code"].(string))
-	}
-
-	datamap := respmap["data"].(map[string]interface{})
-	order := hbpro.parseOrder(datamap)
-	order.Currency = currency
-	//log.Println(respmap)
-	return &order, nil
-}
-
-func (hbpro *HuoBiPro) GetUnfinishOrders(currency CurrencyPair) ([]Order, error) {
-	return hbpro.getOrders(queryOrdersParams{
-		pair:   currency,
-		states: "pre-submitted,submitted,partial-filled",
-		size:   100,
-		//direct:""
-	})
-}
-
-func (hbpro *HuoBiPro) CancelOrder(orderId string, currency CurrencyPair) (bool, error) {
-	path := fmt.Sprintf("/v1/order/orders/%s/submitcancel", orderId)
-	params := url.Values{}
-	hbpro.buildPostForm("POST", path, &params)
-	resp, err := HttpPostForm3(hbpro.httpClient, hbpro.baseUrl+path+"?"+params.Encode(), hbpro.toJson(params),
-		map[string]string{"Content-Type": "application/json", "Accept-Language": "zh-cn"})
-	if err != nil {
-		return false, err
-	}
-
-	var respmap map[string]interface{}
-	err = json.Unmarshal(resp, &respmap)
-	if err != nil {
-		return false, err
-	}
-
-	if respmap["status"].(string) != "ok" {
-		return false, errors.New(string(resp))
-	}
-
-	return true, nil
-}
-
-func (hbpro *HuoBiPro) GetOrderHistorys(currency CurrencyPair, currentPage, pageSize int) ([]Order, error) {
-	return hbpro.getOrders(queryOrdersParams{
-		pair:   currency,
-		size:   pageSize,
-		states: "partial-canceled,filled",
-		direct: "next",
-	})
-}
-
-type queryOrdersParams struct {
-	types,
-	startDate,
-	endDate,
-	states,
-	from,
-	direct string
-	size int
-	pair CurrencyPair
-}
-
-func (hbpro *HuoBiPro) getOrders(queryparams queryOrdersParams) ([]Order, error) {
-	path := "/v1/order/orders"
-	params := url.Values{}
-	params.Set("symbol", strings.ToLower(queryparams.pair.ToSymbol("")))
-	params.Set("states", queryparams.states)
-
-	if queryparams.direct != "" {
-		params.Set("direct", queryparams.direct)
-	}
-
-	if queryparams.size > 0 {
-		params.Set("size", fmt.Sprint(queryparams.size))
-	}
-
-	hbpro.buildPostForm("GET", path, &params)
-	respmap, err := HttpGet(hbpro.httpClient, fmt.Sprintf("%s%s?%s", hbpro.baseUrl, path, params.Encode()))
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
 	if err != nil {
 		return nil, err
 	}
+	return order, nil
+}
 
-	if respmap["status"].(string) != "ok" {
-		return nil, errors.New(respmap["err-code"].(string))
+func (hbpro *HuoBiPro) MarketSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.MarketSell(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
 	}
-
-	datamap := respmap["data"].([]interface{})
-	var orders []Order
-	for _, v := range datamap {
-		ordmap := v.(map[string]interface{})
-		ord := hbpro.parseOrder(ordmap)
-		ord.Currency = queryparams.pair
-		orders = append(orders, ord)
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
 	}
+	return order, nil
+}
 
-	return orders, nil
+func (hbpro *HuoBiPro) GetOneOrder(orderId string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.GetOneOrder(orderId, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (hbpro *HuoBiPro) GetUnfinishOrders(currencyPair CurrencyPair) ([]*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.GetUnfinishOrders(goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := []*Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (hbpro *HuoBiPro) CancelOrder(orderId string, currencyPair CurrencyPair) (bool, error) {
+	cancelresult, err := hbpro.HuoBiPro.CancelOrder(orderId, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	return cancelresult, err
+}
+
+func (hbpro *HuoBiPro) GetOrderHistorys(currency CurrencyPair, currentPage, pageSize int) ([]*Order, error) {
+	goexOrder, err := hbpro.HuoBiPro.GetOrderHistorys(goex.NewCurrencyPair2(currency.ToSymbol("_")), currentPage, pageSize)
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := []*Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
 }
 
 func (hbpro *HuoBiPro) GetTicker(currencyPair CurrencyPair) (*Ticker, error) {
-	url := hbpro.baseUrl + "/market/detail/merged?symbol=" + strings.ToLower(currencyPair.ToSymbol(""))
-	respmap, err := HttpGet(hbpro.httpClient, url)
+	goexTicker, err := hbpro.HuoBiPro.GetTicker(goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
-
-	if respmap["status"].(string) == "error" {
-		return nil, errors.New(respmap["err-msg"].(string))
+	goexjson, _ := json.Marshal(goexTicker)
+	ticker := &Ticker{}
+	err = json.Unmarshal(goexjson, ticker)
+	if err != nil {
+		return nil, err
 	}
-
-	tickmap, ok := respmap["tick"].(map[string]interface{})
-	if !ok {
-		return nil, errors.New("tick assert error")
-	}
-
-	ticker := new(Ticker)
-	ticker.Vol = ToFloat64(tickmap["amount"])
-	ticker.Low = ToFloat64(tickmap["low"])
-	ticker.High = ToFloat64(tickmap["high"])
-	bid, isOk := tickmap["bid"].([]interface{})
-	if isOk != true {
-		return nil, errors.New("no bid")
-	}
-	ask, isOk := tickmap["ask"].([]interface{})
-	if isOk != true {
-		return nil, errors.New("no ask")
-	}
-	ticker.Buy = ToFloat64(bid[0])
-	ticker.Sell = ToFloat64(ask[0])
-	ticker.Last = ToFloat64(tickmap["close"])
-	ticker.Date = ToUint64(respmap["ts"])
-
 	return ticker, nil
 }
 
-func (hbpro *HuoBiPro) GetDepth(size int, currency CurrencyPair) (*Depth, error) {
-	url := hbpro.baseUrl + "/market/depth?symbol=%s&type=step0"
-	respmap, err := HttpGet(hbpro.httpClient, fmt.Sprintf(url, strings.ToLower(currency.ToSymbol(""))))
+func (hbpro *HuoBiPro) GetDepth(size int, currencyPair CurrencyPair) (*Depth, error) {
+	goexDepth, err := hbpro.HuoBiPro.GetDepth(size, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
-
-	if "ok" != respmap["status"].(string) {
-		return nil, errors.New(respmap["err-msg"].(string))
+	goexjson, _ := json.Marshal(goexDepth)
+	depth := &Depth{}
+	err = json.Unmarshal(goexjson, depth)
+	if err != nil {
+		return nil, err
 	}
-
-	tick, _ := respmap["tick"].(map[string]interface{})
-	bids, _ := tick["bids"].([]interface{})
-	asks, _ := tick["asks"].([]interface{})
-
-	depth := new(Depth)
-	_size := size
-	for _, r := range asks {
-		var dr DepthRecord
-		rr := r.([]interface{})
-		dr.Price = ToFloat64(rr[0])
-		dr.Amount = ToFloat64(rr[1])
-		depth.AskList = append(depth.AskList, dr)
-
-		_size--
-		if _size == 0 {
-			break
-		}
-	}
-
-	_size = size
-	for _, r := range bids {
-		var dr DepthRecord
-		rr := r.([]interface{})
-		dr.Price = ToFloat64(rr[0])
-		dr.Amount = ToFloat64(rr[1])
-		depth.BidList = append(depth.BidList, dr)
-
-		_size--
-		if _size == 0 {
-			break
-		}
-	}
-
-	sort.Sort(sort.Reverse(depth.AskList))
-
 	return depth, nil
 }
 
@@ -425,132 +221,37 @@ func (hbpro *HuoBiPro) GetTrades(currencyPair CurrencyPair, since int64) ([]Trad
 	panic("not implement")
 }
 
-func (hbpro *HuoBiPro) buildPostForm(reqMethod, path string, postForm *url.Values) error {
-	postForm.Set("AccessKeyId", hbpro.accessKey)
-	postForm.Set("SignatureMethod", "HmacSHA256")
-	postForm.Set("SignatureVersion", "2")
-	postForm.Set("Timestamp", time.Now().UTC().Format("2006-01-02T15:04:05"))
-	domain := strings.Replace(hbpro.baseUrl, "https://", "", len(hbpro.baseUrl))
-	payload := fmt.Sprintf("%s\n%s\n%s\n%s", reqMethod, domain, path, postForm.Encode())
-	sign, _ := GetParamHmacSHA256Base64Sign(hbpro.secretKey, payload)
-	postForm.Set("Signature", sign)
-	return nil
+func (hbpro *HuoBiPro) GetExchangeName() (string, error) {
+	return hbpro.HuoBiPro.GetExchangeName(), nil
 }
 
-func (hbpro *HuoBiPro) toJson(params url.Values) string {
-	parammap := make(map[string]string)
-	for k, v := range params {
-		parammap[k] = v[0]
-	}
-	jsonData, _ := json.Marshal(parammap)
-	return string(jsonData)
-}
-
-func (hbpro *HuoBiPro) createWsConn() {
-	if hbpro.ws == nil {
-		//connect wsx
-		hbpro.createWsLock.Lock()
-		defer hbpro.createWsLock.Unlock()
-
-		if hbpro.ws == nil {
-			hbpro.ws = NewWsConn("wss://api.huobi.br.com/ws")
-			hbpro.ws.Heartbeat(func() interface{} {
-				return map[string]interface{}{
-					"ping": time.Now().Unix()}
-			}, 5*time.Second)
-			hbpro.ws.ReConnect()
-			hbpro.ws.ReceiveMessage(func(msg []byte) {
-				gzipreader, _ := gzip.NewReader(bytes.NewReader(msg))
-				data, _ := ioutil.ReadAll(gzipreader)
-				datamap := make(map[string]interface{})
-				err := json.Unmarshal(data, &datamap)
-				if err != nil {
-					log.Println("json unmarshal error for ", string(data))
-					return
-				}
-
-				if datamap["ping"] != nil {
-					//log.Println(datamap)
-					hbpro.ws.UpdateActivedTime()
-					hbpro.ws.WriteJSON(map[string]interface{}{
-						"pong": datamap["ping"]}) // 回应心跳
-					return
-				}
-
-				if datamap["pong"] != nil { //
-					hbpro.ws.UpdateActivedTime()
-					return
-				}
-
-				if datamap["id"] != nil { //忽略订阅成功的回执消息
-					log.Println(string(data))
-					return
-				}
-
-				ch, isok := datamap["ch"].(string)
-				if !isok {
-					log.Println("error:", string(data))
-					return
-				}
-
-				tick := datamap["tick"].(map[string]interface{})
-				if hbpro.wsTickerHandleMap[ch] != nil {
-					return
-				}
-
-				if hbpro.wsDepthHandleMap[ch] != nil {
-					(hbpro.wsDepthHandleMap[ch])(hbpro.parseDepthData(tick))
-					return
-				}
-
-				//log.Println(string(data))
-			})
+func (hbpro *HuoBiPro) GetTickerWithWs(currencyPair CurrencyPair, handle func(ticker *Ticker)) error {
+	goexHandler := func(goexTicker *goex.Ticker) {
+		goexjson, _ := json.Marshal(goexTicker)
+		warpperTicker := &Ticker{}
+		err := json.Unmarshal(goexjson, warpperTicker)
+		if err!=nil{
+			handle(nil)
+		}else{
+			handle(warpperTicker)
 		}
+
 	}
+	return hbpro.HuoBiPro.GetTickerWithWs(goex.NewCurrencyPair2(currencyPair.ToSymbol("_")), goexHandler)
 }
 
-func (hbpro *HuoBiPro) parseDepthData(tick map[string]interface{}) *Depth {
-	bids, _ := tick["bids"].([]interface{})
-	asks, _ := tick["asks"].([]interface{})
+func (hbpro *HuoBiPro) GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error {
+	goexHandler := func(goexDepth *goex.Depth) {
+		goexjson, _ := json.Marshal(goexDepth)
+		warpperDepth := &Depth{}
+		err := json.Unmarshal(goexjson, warpperDepth)
+		if err!=nil{
+			handle(nil)
+		}else{
+			handle(warpperDepth)
+		}
 
-	depth := new(Depth)
-	for _, r := range asks {
-		var dr DepthRecord
-		rr := r.([]interface{})
-		dr.Price = ToFloat64(rr[0])
-		dr.Amount = ToFloat64(rr[1])
-		depth.AskList = append(depth.AskList, dr)
 	}
+	return hbpro.HuoBiPro.GetDepthWithWs(goex.NewCurrencyPair2(currencyPair.ToSymbol("_")), goexHandler)
 
-	for _, r := range bids {
-		var dr DepthRecord
-		rr := r.([]interface{})
-		dr.Price = ToFloat64(rr[0])
-		dr.Amount = ToFloat64(rr[1])
-		depth.BidList = append(depth.BidList, dr)
-	}
-
-	return depth
-}
-
-func (hbpro *HuoBiPro) GetExchangeName() string {
-	return HUOBI_PRO
-}
-
-func (hbpro *HuoBiPro) GetTickerWithWs(pair CurrencyPair, handle func(ticker *Ticker)) error {
-	hbpro.createWsConn()
-	sub := fmt.Sprintf("market.%s.detail", strings.ToLower(pair.ToSymbol("")))
-	hbpro.wsTickerHandleMap[sub] = handle
-	return hbpro.ws.Subscribe(map[string]interface{}{
-		"id":  1,
-		"sub": sub})
-}
-
-func (hbpro *HuoBiPro) GetDepthWithWs(pair CurrencyPair, handle func(dep *Depth)) error {
-	hbpro.createWsConn()
-	sub := fmt.Sprintf("market.%s.depth.step0", strings.ToLower(pair.ToSymbol("")))
-	hbpro.wsDepthHandleMap[sub] = handle
-	return hbpro.ws.Subscribe(map[string]interface{}{
-		"id":  2,
-		"sub": sub})
 }
