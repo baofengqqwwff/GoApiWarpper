@@ -1,28 +1,31 @@
 package main
 
 import (
-	"net/http"
-	"log"
 	"time"
-		"sync"
 	"os"
-	"github.com/baofengqqwwff/GoApiWarpper/huobi_warpper"
-	. "github.com/baofengqqwwff/GoApiWarpper"
+	"github.com/adshao/go-binance"
+	"fmt"
 )
 
 func main() {
-	os.Setenv("https_proxy" , "socks5://127.0.0.1:1080")
+	os.Setenv("https_proxy", "socks5://127.0.0.1:1080")
 
-	huobipro := huobi_warpper.NewHuoBiPro(http.DefaultClient, "", "", "")
-	huobipro.GetDepthWithWs(NewCurrencyPair2("btc_usdt"), func(depth *Depth) {
-		log.Println(depth)
-	})
-	log.Println("启动成功")
-	var wg sync.WaitGroup
-	wg.Add(1)
+	wsDepthHandler := func(event *binance.WsDepthEvent) {
+		fmt.Println(event)
+	}
+	errHandler := func(err error) {
+		fmt.Println(err)
+	}
+	doneC, stopC, err := binance.WsDepthServe("LTCBTC", wsDepthHandler, errHandler)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// use stopC to exit
 	go func() {
-		time.Sleep(time.Minute)
-		wg.Done()
+		time.Sleep(5 * time.Second)
+		stopC <- struct{}{}
 	}()
-	wg.Wait()
+	// remove this if you do not want to be blocked here
+	<-doneC
 }

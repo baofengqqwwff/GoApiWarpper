@@ -89,6 +89,7 @@ type APIConfig struct {
 
 type Kline struct {
 	Pair      CurrencyPair
+	Period    string
 	Timestamp int64
 	Open,
 	Close,
