@@ -3,13 +3,24 @@ package binance_warpper
 import (
 	"encoding/json"
 	"github.com/nntaoli-project/GoEx/binance"
+	binancews "github.com/adshao/go-binance"
 	"net/http"
 	"github.com/nntaoli-project/GoEx"
-	. "github.com/baofengqqwwff/GoApiWrapper"
+	. "github.com/baofengqqwwff/GoApiWarpper"
+	"sync"
+	"net/url"
+	"log"
+	"strconv"
+	"errors"
+	"time"
 )
 
 type BinanceWarpper struct {
 	*binance.Binance
+	ws                *WsConn
+	createWsLock      sync.Mutex
+	wsTickerHandleMap map[string]func(*Ticker)
+	wsDepthHandleMap  map[string]func(*Depth)
 }
 
 func New(client *http.Client, api_key, secret_key string) *BinanceWarpper {
@@ -18,13 +29,13 @@ func New(client *http.Client, api_key, secret_key string) *BinanceWarpper {
 	return binanceWarpper
 }
 
-func (bn *BinanceWarpper) GetExchangeName() string {
-	return bn.Binance.GetExchangeName()
+func (bn *BinanceWarpper) GetExchangeName() (string, error) {
+	return bn.Binance.GetExchangeName(), nil
 }
 
-func (bn *BinanceWarpper) GetTicker(currencyPair string) (*Ticker, error) {
+func (bn *BinanceWarpper) GetTicker(currencyPair CurrencyPair) (*Ticker, error) {
 
-	goexTicker, err := bn.Binance.GetTicker(goex.NewCurrencyPair2(currencyPair))
+	goexTicker, err := bn.Binance.GetTicker(goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +48,8 @@ func (bn *BinanceWarpper) GetTicker(currencyPair string) (*Ticker, error) {
 	return ticker, nil
 }
 
-func (bn *BinanceWarpper) GetDepth(size int, currencyPair string) (*Depth, error) {
-	goexDepth, err := bn.Binance.GetDepth(size, goex.NewCurrencyPair2(currencyPair))
+func (bn *BinanceWarpper) GetDepth(size string, currencyPair CurrencyPair) (*Depth, error) {
+	goexDepth, err := bn.Binance.GetDepth(ToInt(size), goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
 	if err != nil {
 		return nil, err
 	}
@@ -65,155 +76,274 @@ func (bn *BinanceWarpper) GetAccount() (*Account, error) {
 	return account, nil
 }
 
-//
-//func (bn *Binance) LimitBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
-//	return bn.placeOrder(amount, price, currencyPair, "LIMIT", "BUY")
+func (bn *BinanceWarpper) LimitBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := bn.Binance.LimitBuy(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (bn *BinanceWarpper) LimitSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := bn.Binance.LimitSell(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (bn *BinanceWarpper) MarketBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := bn.Binance.MarketBuy(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (bn *BinanceWarpper) MarketSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := bn.Binance.MarketSell(amount, price, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (bn *BinanceWarpper) CancelOrder(orderId string, currencyPair CurrencyPair) (bool, error) {
+	return bn.Binance.CancelOrder(orderId, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+
+}
+
+func (bn *BinanceWarpper) GetOneOrder(orderId string, currencyPair CurrencyPair) (*Order, error) {
+	goexOrder, err := bn.Binance.GetOneOrder(orderId, goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrder)
+	order := &Order{}
+	err = json.Unmarshal(goexjson, order)
+	if err != nil {
+		return nil, err
+	}
+	return order, nil
+}
+
+func (bn *BinanceWarpper) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order, error) {
+	goexOrders, err := bn.Binance.GetUnfinishOrders(goex.NewCurrencyPair2(currencyPair.ToSymbol("_")))
+	if err != nil {
+		return nil, err
+	}
+	goexjson, _ := json.Marshal(goexOrders)
+	orders := []Order{}
+	err = json.Unmarshal(goexjson, orders)
+	if err != nil {
+		return nil, err
+	}
+	return orders, nil
+}
+
+func (bn *BinanceWarpper) GetSymbols() ([]CurrencyPair, error) {
+	exchangeInfoUri := "https://api.binance.com/api/v1/exchangeInfo"
+	bodyDataMap, err := HttpGet(http.DefaultClient, exchangeInfoUri)
+	if err != nil {
+		return nil, err
+	}
+	symbols := []CurrencyPair{}
+	symbolsInfo, _ := bodyDataMap["symbols"].([]interface{})
+	for _, infoInterface := range symbolsInfo {
+		info, _ := infoInterface.(interface{})
+		symbolInfo, _ := info.(map[string]interface{})
+		symbols = append(symbols, NewCurrencyPair2(symbolInfo["baseAsset"].(string)+"_"+symbolInfo["quoteAsset"].(string)))
+	}
+	return symbols, nil
+}
+func (bn *BinanceWarpper) GetKlineRecords(period, size, since string, currencyPair CurrencyPair) ([]Kline, error) {
+	klineUri := "https://api.binance.com/api/v1/klines?"
+	params := url.Values{}
+	params.Set("symbol", currencyPair.ToSymbol(""))
+	if ToInt(size) > 0 {
+		params.Set("limit", size)
+	}
+	if ToInt(since) > 0 {
+		params.Set("startTime", since)
+	}
+	var _period string
+	switch period {
+	case KLINE_PERIOD_1MIN:
+		{
+			params.Set("interval", "1m")
+			_period = "1m"
+		}
+	case KLINE_PERIOD_5MIN:
+		{
+			params.Set("interval", "5m")
+			_period = "5m"
+		}
+	case KLINE_PERIOD_15MIN:
+		{
+			params.Set("interval", "15m")
+			_period = "15m"
+		}
+	case KLINE_PERIOD_30MIN:
+		{
+			params.Set("interval", "30m")
+			_period = "30m"
+		}
+	case KLINE_PERIOD_60MIN:
+		{
+			params.Set("interval", "1h")
+			_period = "1h"
+		}
+	case KLINE_PERIOD_4H:
+		{
+			params.Set("interval", "4h")
+			_period = "4h"
+		}
+	case KLINE_PERIOD_1DAY:
+		{
+			params.Set("interval", "1d")
+			_period = "1d"
+		}
+	default:
+		return nil, errors.New("do not have this period")
+	}
+	path := klineUri + params.Encode()
+	respList, err := HttpGet3(http.DefaultClient, path, map[string]string{"X-MBX-APIKEY": ""})
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	klineList := []Kline{}
+	for _, resp := range respList {
+		kline := Kline{}
+		respBodyList, _ := resp.([]interface{})
+		kline.Pair = currencyPair
+		kline.Timestamp = int64(respBodyList[0].(float64))
+		kline.Period = _period
+		kline.Open, _ = strconv.ParseFloat(respBodyList[1].(string), 64)
+		kline.High, _ = strconv.ParseFloat(respBodyList[2].(string), 64)
+		kline.Low, _ = strconv.ParseFloat(respBodyList[3].(string), 64)
+		kline.Close, _ = strconv.ParseFloat(respBodyList[4].(string), 64)
+		kline.Vol, _ = strconv.ParseFloat(respBodyList[5].(string), 64)
+		klineList = append(klineList, kline)
+	}
+	return klineList, nil
+}
+
+//非个人，整个交易所的交易记录
+func (bn *BinanceWarpper) GetTrades(since string, currencyPair CurrencyPair) ([]Trade, error) {
+	panic("not implements")
+}
+
+func (bn *BinanceWarpper) GetOrderHistorys(currentPage, pageSize string, currency CurrencyPair) ([]Order, error) {
+	panic("not implements")
+}
+
+//type WsPartialDepthEvent struct {
+//	Symbol       string
+//	LastUpdateID int64         `json:"lastUpdateId"`
+//	Bids         []DepthRecord `json:"bids"`
+//	Asks         []DepthRecord `json:"asks"`
 //}
+//type WsHandler func(message []byte)
+//type ErrHandler func(err error)
+
 //
-//func (bn *Binance) LimitSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
-//	return bn.placeOrder(amount, price, currencyPair, "LIMIT", "SELL")
-//}
+//func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error {
+//	endpoint := fmt.Sprintf("%s/%s@depth%s", "wss://stream.binance.com:9443/ws", strings.ToLower(currencyPair.ToSymbol("")), "10")
 //
-//func (bn *Binance) MarketBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
-//	return bn.placeOrder(amount, price, currencyPair, "MARKET", "BUY")
-//}
-//
-//func (bn *Binance) MarketSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
-//	return bn.placeOrder(amount, price, currencyPair, "MARKET", "SELL")
-//}
-//
-//func (bn *Binance) CancelOrder(orderId string, currencyPair CurrencyPair) (bool, error) {
-//	currencyPair = bn.adaptCurrencyPair(currencyPair)
-//	path := API_V3 + ORDER_URI
-//	params := url.Values{}
-//	params.Set("symbol", currencyPair.ToSymbol(""))
-//	params.Set("orderId", orderId)
-//
-//	bn.buildParamsSigned(&params)
-//
-//	resp, err := HttpDeleteForm(bn.httpClient, path, params, map[string]string{"X-MBX-APIKEY": bn.accessKey})
-//
-//	//log.Println("resp:", string(resp), "err:", err)
-//	if err != nil {
-//		return false, err
-//	}
-//
-//	respmap := make(map[string]interface{})
-//	err = json.Unmarshal(resp, &respmap)
-//	if err != nil {
-//		log.Println(string(resp))
-//		return false, err
-//	}
-//
-//	orderIdCanceled := ToInt(respmap["orderId"])
-//	if orderIdCanceled <= 0 {
-//		return false, errors.New(string(resp))
-//	}
-//
-//	return true, nil
-//}
-//
-//func (bn *Binance) GetOneOrder(orderId string, currencyPair CurrencyPair) (*Order, error) {
-//	params := url.Values{}
-//	currencyPair = bn.adaptCurrencyPair(currencyPair)
-//	params.Set("symbol", currencyPair.ToSymbol(""))
-//	if orderId != "" {
-//		params.Set("orderId", orderId)
-//	}
-//	params.Set("orderId", orderId)
-//
-//	bn.buildParamsSigned(&params)
-//	path := API_V3 + ORDER_URI + params.Encode()
-//
-//	respmap, err := HttpGet2(bn.httpClient, path, map[string]string{"X-MBX-APIKEY": bn.accessKey})
-//	//log.Println(respmap)
-//	if err != nil {
-//		return nil, err
-//	}
-//	status := respmap["status"].(string)
-//	side := respmap["side"].(string)
-//
-//	ord := Order{}
-//	ord.Currency = currencyPair
-//	ord.OrderID = ToInt(orderId)
-//	ord.OrderID2 = orderId
-//
-//	if side == "SELL" {
-//		ord.Side = SELL
-//	} else {
-//		ord.Side = BUY
-//	}
-//
-//	switch status {
-//	case "FILLED":
-//		ord.Status = ORDER_FINISH
-//	case "PARTIALLY_FILLED":
-//		ord.Status = ORDER_PART_FINISH
-//	case "CANCELED":
-//		ord.Status = ORDER_CANCEL
-//	case "PENDING_CANCEL":
-//		ord.Status = ORDER_CANCEL_ING
-//	case "REJECTED":
-//		ord.Status = ORDER_REJECT
-//	}
-//
-//	ord.Amount = ToFloat64(respmap["origQty"].(string))
-//	ord.Price = ToFloat64(respmap["price"].(string))
-//	ord.DealAmount = ToFloat64(respmap["executedQty"])
-//	ord.AvgPrice = ord.Price // response no avg price ， fill price
-//
-//	return &ord, nil
-//}
-//
-//func (bn *Binance) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order, error) {
-//	params := url.Values{}
-//	currencyPair = bn.adaptCurrencyPair(currencyPair)
-//	params.Set("symbol", currencyPair.ToSymbol(""))
-//
-//	bn.buildParamsSigned(&params)
-//	path := API_V3 + UNFINISHED_ORDERS_INFO + params.Encode()
-//
-//	respmap, err := HttpGet3(bn.httpClient, path, map[string]string{"X-MBX-APIKEY": bn.accessKey})
-//	//log.Println("respmap", respmap, "err", err)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	orders := make([]Order, 0)
-//	for _, v := range respmap {
-//		ord := v.(map[string]interface{})
-//		side := ord["side"].(string)
-//		orderSide := SELL
-//		if side == "BUY" {
-//			orderSide = BUY
+//	wsHandler := func(message []byte) {
+//		j, err := simplejson.NewJson(message)
+//		if err != nil {
+//			return
+//		}
+//		event := new(Depth)
+//		event.Pair = currencyPair
+//		event.UTime = time.Now()
+//		bidsLen := len(j.Get("bids").MustArray())
+//		event.BidList = make([]DepthRecord, bidsLen)
+//		for i := 0; i < bidsLen; i++ {
+//			item := j.Get("bids").GetIndex(i)
+//			price, _ := strconv.ParseFloat(item.GetIndex(0).MustString(), 64)
+//			amount, _ := strconv.ParseFloat(item.GetIndex(1).MustString(), 64)
+//			event.BidList[i] = DepthRecord{
+//				Price:  price,
+//				Amount: amount,
+//			}
+//		}
+//		asksLen := len(j.Get("asks").MustArray())
+//		event.AskList = make([]DepthRecord, asksLen)
+//		for i := 0; i < asksLen; i++ {
+//			item := j.Get("asks").GetIndex(i)
+//			price, _ := strconv.ParseFloat(item.GetIndex(0).MustString(), 64)
+//			amount, _ := strconv.ParseFloat(item.GetIndex(1).MustString(), 64)
+//			event.AskList[i] = DepthRecord{
+//				Price:  price,
+//				Amount: amount,
+//			}
 //		}
 //
-//		orders = append(orders, Order{
-//			OrderID:   ToInt(ord["orderId"]),
-//			OrderID2:  fmt.Sprint(ToInt(ord["id"])),
-//			Currency:  currencyPair,
-//			Price:     ToFloat64(ord["price"]),
-//			Amount:    ToFloat64(ord["origQty"]),
-//			Side:      TradeSide(orderSide),
-//			Status:    ORDER_UNFINISH,
-//			OrderTime: ToInt(ord["time"])})
+//		handle(event)
 //	}
-//	return orders, nil
+//	return wsServe(endpoint, wsHandler)
 //}
-//
-//func (bn *Binance) GetKlineRecords(currency CurrencyPair, period, size, since int) ([]Kline, error) {
-//	panic("not implements")
-//}
-//
-////非个人，整个交易所的交易记录
-//func (bn *Binance) GetTrades(currencyPair CurrencyPair, since int64) ([]Trade, error) {
-//	panic("not implements")
-//}
-//
-//func (bn *Binance) GetOrderHistorys(currency CurrencyPair, currentPage, pageSize int) ([]Order, error) {
-//	panic("not implements")
-//}
-//
-//func (ba *Binance) adaptCurrencyPair(pair CurrencyPair) CurrencyPair {
-//	return pair.AdaptBchToBcc().AdaptUsdToUsdt()
-//}
+
+func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error {
+	otherPFHandler := func(event *binancews.WsPartialDepthEvent) {
+		depth := &Depth{}
+		depth.Pair = currencyPair
+		depth.UTime = time.Now()
+		depth.AskList = make([]DepthRecord, len(event.Asks))
+		depth.BidList = make([]DepthRecord, len(event.Bids))
+		for i, ask := range event.Asks {
+			price, _ := strconv.ParseFloat(ask.Price, 64)
+			amount, _ := strconv.ParseFloat(ask.Quantity, 64)
+			depth.AskList[i] = DepthRecord{
+				Price:  price,
+				Amount: amount,
+			}
+		}
+		for i, bid := range event.Bids {
+			price, _ := strconv.ParseFloat(bid.Price, 64)
+			amount, _ := strconv.ParseFloat(bid.Quantity, 64)
+			depth.BidList[i] = DepthRecord{
+				Price:  price,
+				Amount: amount,
+			}
+		}
+
+		handle(depth)
+	}
+	errHandler := func(err error) {
+		log.Println(err)
+	}
+	_, _, err := binancews.WsPartialDepthServe(currencyPair.ToSymbol(""), "10", otherPFHandler, errHandler)
+	return err
+	//return nil
+}
+func (bn *BinanceWarpper) CloseWs() {
+
+}

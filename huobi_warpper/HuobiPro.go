@@ -2,7 +2,7 @@ package huobi_warpper
 
 import (
 	"encoding/json"
-	. "github.com/baofengqqwwff/GoApiWrapper"
+	. "github.com/baofengqqwwff/GoApiWarpper"
 	"net/http"
 	"github.com/nntaoli-project/GoEx/huobi"
 	"github.com/nntaoli-project/GoEx"
