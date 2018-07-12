@@ -18,7 +18,7 @@ type API interface {
 	GetKlineRecords(period, size, since string, currencyPair CurrencyPair) ([]Kline, error)
 	//非个人，整个交易所的交易记录
 	GetTrades(since string, currencyPair CurrencyPair) ([]Trade, error)
-
+	GetSymbols()([]CurrencyPair,error)
 	GetExchangeName() (string, error)
 	GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error
 	CloseWs()
