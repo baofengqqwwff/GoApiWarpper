@@ -314,6 +314,7 @@ func (bn *BinanceWarpper) GetOrderHistorys(currentPage, pageSize string, currenc
 func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error {
 	otherPFHandler := func(event *binancews.WsPartialDepthEvent) {
 		depth := &Depth{}
+		depth.ExchangeName = "binance"
 		depth.Pair = currencyPair
 		depth.UTime = time.Now()
 		depth.AskList = make([]DepthRecord, len(event.Asks))

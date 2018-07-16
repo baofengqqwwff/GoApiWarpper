@@ -35,14 +35,14 @@ type HuoBiPro struct {
 	*huobi.HuoBiPro
 	ws                *WsConn
 	createWsLock      sync.Mutex
-	wsTickerHandleMap map[string]func(*Ticker)
-	wsDepthHandleMap  map[string]func(*Depth)
+	wsTickerHandleMap map[CurrencyPair]func(*Ticker)
+	wsDepthHandleMap  map[CurrencyPair]func(*Depth)
 }
 
 func NewHuoBiPro(client *http.Client, apikey, secretkey, accountId string) *HuoBiPro {
 	hbpro := &HuoBiPro{}
-	hbpro.wsDepthHandleMap = make(map[string]func(*Depth))
-	hbpro.wsTickerHandleMap = make(map[string]func(*Ticker))
+	hbpro.wsDepthHandleMap = make(map[CurrencyPair]func(*Depth))
+	hbpro.wsTickerHandleMap = make(map[CurrencyPair]func(*Ticker))
 	hbpro.HuoBiPro = huobi.NewHuoBiPro(client, apikey, secretkey, accountId)
 
 	return hbpro
@@ -54,8 +54,8 @@ func NewHuoBiPro(client *http.Client, apikey, secretkey, accountId string) *HuoB
 func NewHuoBiProSpot(client *http.Client, apikey, secretkey string) *HuoBiPro {
 
 	hbpro := &HuoBiPro{}
-	hbpro.wsDepthHandleMap = make(map[string]func(*Depth))
-	hbpro.wsTickerHandleMap = make(map[string]func(*Ticker))
+	hbpro.wsDepthHandleMap = make(map[CurrencyPair]func(*Depth))
+	hbpro.wsTickerHandleMap = make(map[CurrencyPair]func(*Ticker))
 	hbpro.HuoBiPro = huobi.NewHuoBiProSpot(client, apikey, secretkey)
 
 	return hbpro
@@ -66,8 +66,8 @@ func NewHuoBiProSpot(client *http.Client, apikey, secretkey string) *HuoBiPro {
  */
 func NewHuoBiProPoint(client *http.Client, apikey, secretkey string) *HuoBiPro {
 	hbpro := &HuoBiPro{}
-	hbpro.wsDepthHandleMap = make(map[string]func(*Depth))
-	hbpro.wsTickerHandleMap = make(map[string]func(*Ticker))
+	hbpro.wsDepthHandleMap = make(map[CurrencyPair]func(*Depth))
+	hbpro.wsTickerHandleMap = make(map[CurrencyPair]func(*Ticker))
 	hbpro.HuoBiPro = huobi.NewHuoBiProPoint(client, apikey, secretkey)
 
 	return hbpro
@@ -361,7 +361,7 @@ func (hbpro *HuoBiPro) GetTickerWithWs(pair CurrencyPair, handle func(ticker *Ti
 
 	hbpro.createWsConn()
 	sub := fmt.Sprintf("market.%s.detail", strings.ToLower(pair.ToSymbol("")))
-	hbpro.wsTickerHandleMap[sub] = handle
+	hbpro.wsTickerHandleMap[pair] = handle
 	return hbpro.ws.Subscribe(map[string]interface{}{
 		"id":  1,
 		"sub": sub})
@@ -373,7 +373,7 @@ func (hbpro *HuoBiPro) CloseWs(){
 func (hbpro *HuoBiPro) GetDepthWithWs(pair CurrencyPair, handle func(dep *Depth)) error {
 	hbpro.createWsConn()
 	sub := fmt.Sprintf("market.%s.depth.step0", strings.ToLower(pair.ToSymbol("")))
-	hbpro.wsDepthHandleMap[sub] = handle
+	hbpro.wsDepthHandleMap[pair] = handle
 	return hbpro.ws.Subscribe(map[string]interface{}{
 		"id":  2,
 		"sub": sub})
@@ -426,16 +426,20 @@ func (hbpro *HuoBiPro) createWsConn() {
 					log.Println("error:", string(data))
 					return
 				}
-
 				tick := datamap["tick"].(map[string]interface{})
-				if hbpro.wsTickerHandleMap[ch] != nil {
-					return
+				//depth
+				if strings.Contains(ch,"depth"){
+					for pair,function := range hbpro.wsDepthHandleMap{
+						if strings.Contains(ch,strings.ToLower(pair.ToSymbol(""))){
+							depth := hbpro.parseDepthData(tick)
+							depth.Pair = pair
+							depth.ExchangeName = "huobi"
+							function(depth)
+						}
+					}
 				}
+				//todo: tick事件等
 
-				if hbpro.wsDepthHandleMap[ch] != nil {
-					(hbpro.wsDepthHandleMap[ch])(hbpro.parseDepthData(tick))
-					return
-				}
 
 				//log.Println(string(data))
 			})
