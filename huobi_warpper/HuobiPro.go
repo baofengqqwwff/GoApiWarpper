@@ -243,10 +243,12 @@ func (hbpro *HuoBiPro) GetDepth(size string, currencyPair CurrencyPair) (*Depth,
 	}
 	goexjson, _ := json.Marshal(goexDepth)
 	depth := &Depth{}
+
 	err = json.Unmarshal(goexjson, depth)
 	if err != nil {
 		return nil, err
 	}
+	depth.Pair=currencyPair
 	return depth, nil
 }
 
