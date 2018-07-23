@@ -3,7 +3,6 @@ package binance_warpper
 import (
 	"encoding/json"
 	"github.com/nntaoli-project/GoEx/binance"
-	binancews "github.com/adshao/go-binance"
 	"net/http"
 	"github.com/nntaoli-project/GoEx"
 	. "github.com/baofengqqwwff/GoApiWarpper"
@@ -13,18 +12,24 @@ import (
 	"strconv"
 	"errors"
 	"time"
+	"strings"
+	"fmt"
+	"github.com/bitly/go-simplejson"
+	"github.com/gorilla/websocket"
 )
 
 type BinanceWarpper struct {
 	*binance.Binance
 	ws                *WsConn
 	createWsLock      sync.Mutex
-	wsTickerHandleMap map[string]func(*Ticker)
-	wsDepthHandleMap  map[string]func(*Depth)
+	wsTickerHandleMap map[CurrencyPair]func(*Ticker)
+	wsDepthHandleMap  map[CurrencyPair]func(*Depth)
 }
 
 func New(client *http.Client, api_key, secret_key string) *BinanceWarpper {
 	binanceWarpper := &BinanceWarpper{}
+	binanceWarpper.wsTickerHandleMap = map[CurrencyPair]func(*Ticker){}
+	binanceWarpper.wsDepthHandleMap = map[CurrencyPair]func(*Depth){}
 	binanceWarpper.Binance = binance.New(client, api_key, secret_key)
 	return binanceWarpper
 }
@@ -310,9 +315,73 @@ func (bn *BinanceWarpper) GetOrderHistorys(currentPage, pageSize string, currenc
 //	}
 //	return wsServe(endpoint, wsHandler)
 //}
+//
+//func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error {
+//	otherPFHandler := func(event *binancews.WsPartialDepthEvent) {
+//		depth := &Depth{}
+//		depth.ExchangeName = "binance"
+//		depth.Pair = currencyPair
+//		depth.UTime = time.Now()
+//		depth.AskList = make([]DepthRecord, len(event.Asks))
+//		depth.BidList = make([]DepthRecord, len(event.Bids))
+//		for i, ask := range event.Asks {
+//			price, _ := strconv.ParseFloat(ask.Price, 64)
+//			amount, _ := strconv.ParseFloat(ask.Quantity, 64)
+//			depth.AskList[i] = DepthRecord{
+//				Price:  price,
+//				Amount: amount,
+//			}
+//		}
+//		for i, bid := range event.Bids {
+//			price, _ := strconv.ParseFloat(bid.Price, 64)
+//			amount, _ := strconv.ParseFloat(bid.Quantity, 64)
+//			depth.BidList[i] = DepthRecord{
+//				Price:  price,
+//				Amount: amount,
+//			}
+//		}
+//
+//		handle(depth)
+//	}
+//	errHandler := func(err error) {
+//		log.Println(err)
+//	}
+//	_, _, err := binancews.WsPartialDepthServe(currencyPair.ToSymbol(""), "10", otherPFHandler, errHandler)
+//	return err
+//	//return nil
+//}
 
-func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(depth *Depth)) error {
-	otherPFHandler := func(event *binancews.WsPartialDepthEvent) {
+func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(dep *Depth)) error {
+	endpoint := fmt.Sprintf("wss://stream.binance.com:9443/ws/%s@depth%s", strings.ToLower(currencyPair.ToSymbol("")), "10")
+	bn.createWsConn(endpoint)
+	bn.ws.ReceiveMessage(func(msg []byte) {
+		j, err := newJSON(msg)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		event := new(WsPartialDepthEvent)
+		event.Symbol = currencyPair.ToSymbol("")
+		event.LastUpdateID = j.Get("lastUpdateId").MustInt64()
+		bidsLen := len(j.Get("bids").MustArray())
+		event.Bids = make([]Bid, bidsLen)
+		for i := 0; i < bidsLen; i++ {
+			item := j.Get("bids").GetIndex(i)
+			event.Bids[i] = Bid{
+				Price:    item.GetIndex(0).MustString(),
+				Quantity: item.GetIndex(1).MustString(),
+			}
+		}
+		asksLen := len(j.Get("asks").MustArray())
+		event.Asks = make([]Ask, asksLen)
+		for i := 0; i < asksLen; i++ {
+			item := j.Get("asks").GetIndex(i)
+			event.Asks[i] = Ask{
+				Price:    item.GetIndex(0).MustString(),
+				Quantity: item.GetIndex(1).MustString(),
+			}
+		}
+
 		depth := &Depth{}
 		depth.ExchangeName = "binance"
 		depth.Pair = currencyPair
@@ -335,16 +404,83 @@ func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(
 				Amount: amount,
 			}
 		}
-
 		handle(depth)
-	}
-	errHandler := func(err error) {
-		log.Println(err)
-	}
-	_, _, err := binancews.WsPartialDepthServe(currencyPair.ToSymbol(""), "10", otherPFHandler, errHandler)
-	return err
-	//return nil
+
+		//log.Println(string(data))
+	})
+	bn.wsDepthHandleMap[currencyPair] = handle
+	return nil
 }
+
+func newJSON(data []byte) (j *simplejson.Json, err error) {
+	j, err = simplejson.NewJson(data)
+	if err != nil {
+		return nil, err
+	}
+	return j, nil
+}
+
+// WsPartialDepthEvent define websocket partial depth book event
+type WsPartialDepthEvent struct {
+	Symbol       string
+	LastUpdateID int64 `json:"lastUpdateId"`
+	Bids         []Bid `json:"bids"`
+	Asks         []Ask `json:"asks"`
+}
+type Bid struct {
+	Price    string
+	Quantity string
+}
+
+// Ask define ask info with price and quantity
+type Ask struct {
+	Price    string
+	Quantity string
+}
+
+func (bn *BinanceWarpper) createWsConn(endpoint string) {
+	if bn.ws == nil {
+		//connect wsx
+		bn.createWsLock.Lock()
+		defer bn.createWsLock.Unlock()
+
+		if bn.ws == nil {
+			bn.ws = NewWsConn(endpoint)
+			bn.ws.ReConnect()
+			keepAlive(bn.ws,10*time.Second)
+
+		}
+	}
+}
+
+func keepAlive(ws *WsConn, timeout time.Duration) {
+	ticker := time.NewTicker(timeout)
+
+	lastResponse := time.Now()
+	ws.Conn.SetPongHandler(func(msg string) error {
+		lastResponse = time.Now()
+		ws.UpdateActivedTime()
+		return nil
+	})
+
+	go func() {
+		defer ticker.Stop()
+		for {
+			deadline := time.Now().Add(10 * time.Second)
+			err := ws.Conn.WriteControl(websocket.PingMessage, []byte{}, deadline)
+			if err != nil {
+				return
+			}
+			<-ticker.C
+			if time.Now().Sub(lastResponse) > timeout {
+				ws.ReConnect()
+
+				return
+			}
+		}
+	}()
+}
+
 func (bn *BinanceWarpper) CloseWs() {
 
 }
