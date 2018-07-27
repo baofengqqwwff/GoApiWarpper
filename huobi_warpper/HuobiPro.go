@@ -435,7 +435,7 @@ func (hbpro *HuoBiPro) createWsConn() {
 						if strings.Contains(ch,strings.ToLower(pair.ToSymbol(""))){
 							depth := hbpro.parseDepthData(tick)
 							depth.Pair = pair
-							depth.ExchangeName = "huobi"
+							depth.Exchange = "huobi.pro"
 							function(depth)
 						}
 					}

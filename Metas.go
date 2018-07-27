@@ -6,6 +6,7 @@ import (
 )
 
 type Order struct {
+	Exchange string
 	Price,
 	Amount,
 	AvgPrice,
@@ -73,7 +74,7 @@ func (dr DepthRecords) Less(i, j int) bool {
 }
 
 type Depth struct {
-	ExchangeName string
+	Exchange string
 	ContractType string //for future
 	Pair         CurrencyPair
 	UTime        time.Time
@@ -89,9 +90,10 @@ type APIConfig struct {
 }
 
 type Kline struct {
-	Pair      CurrencyPair
-	Period    string
-	Timestamp int64
+	Exchange string
+	Pair         CurrencyPair
+	Period       string
+	Timestamp    int64
 	Open,
 	Close,
 	High,

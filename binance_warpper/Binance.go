@@ -383,7 +383,7 @@ func (bn *BinanceWarpper) GetDepthWithWs(currencyPair CurrencyPair, handle func(
 		}
 
 		depth := &Depth{}
-		depth.ExchangeName = "binance"
+		depth.Exchange = "binance.com"
 		depth.Pair = currencyPair
 		depth.UTime = time.Now()
 		depth.AskList = make([]DepthRecord, len(event.Asks))
