@@ -52,7 +52,11 @@ func (ws *WsConn) ReConnect() {
 					} else {
 						ws.Conn = wsConn
 						ws.actived = time.Now()
-
+						//re subscribe
+						for _, sub := range ws.subs {
+							log.Println("subscribe:", sub)
+							ws.WriteJSON(sub)
+						}
 					}
 				}
 				timer.Reset(ws.checkConnectIntervalTime)
