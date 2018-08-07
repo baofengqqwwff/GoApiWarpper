@@ -1,21 +1,22 @@
 package huobi_warpper
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
-	. "github.com/baofengqqwwff/GoApiWarpper"
-	"net/http"
-	"github.com/nntaoli-project/GoEx/huobi"
-	"github.com/nntaoli-project/GoEx"
-	"sync"
-	"log"
-	"strings"
-	"net/url"
 	"errors"
 	"fmt"
-	"time"
-	"compress/gzip"
-	"bytes"
+	. "github.com/baofengqqwwff/GoApiWarpper"
+	"github.com/jinzhu/copier"
+	"github.com/nntaoli-project/GoEx"
+	"github.com/nntaoli-project/GoEx/huobi"
 	"io/ioutil"
+	"log"
+	"net/http"
+	"net/url"
+	"strings"
+	"sync"
+	"time"
 )
 
 var HBPOINT = NewCurrency("HBPOINT", "")
@@ -96,13 +97,10 @@ func (hbpro *HuoBiPro) GetAccountInfo(acc string) (*AccountInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexAccountInfo)
+
 	accountInfo := &AccountInfo{}
-	err = json.Unmarshal(goexjson, accountInfo)
-	if err != nil {
-		return nil, err
-	}
-	return accountInfo, nil
+	err = copier.Copy(accountInfo, goexAccountInfo)
+	return accountInfo, err
 }
 
 func (hbpro *HuoBiPro) GetAccount() (*Account, error) {
@@ -110,13 +108,9 @@ func (hbpro *HuoBiPro) GetAccount() (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexAccountInfo)
-	accountInfo := &Account{}
-	err = json.Unmarshal(goexjson, accountInfo)
-	if err != nil {
-		return nil, err
-	}
-	return accountInfo, nil
+	account := &Account{}
+	err = copier.Copy(account, goexAccountInfo)
+	return account, err
 }
 
 func (hbpro *HuoBiPro) LimitBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -124,13 +118,9 @@ func (hbpro *HuoBiPro) LimitBuy(amount, price string, currencyPair CurrencyPair)
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (hbpro *HuoBiPro) LimitSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -138,13 +128,10 @@ func (hbpro *HuoBiPro) LimitSell(amount, price string, currencyPair CurrencyPair
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
+
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (hbpro *HuoBiPro) MarketBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -152,13 +139,9 @@ func (hbpro *HuoBiPro) MarketBuy(amount, price string, currencyPair CurrencyPair
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (hbpro *HuoBiPro) MarketSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -166,13 +149,9 @@ func (hbpro *HuoBiPro) MarketSell(amount, price string, currencyPair CurrencyPai
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (hbpro *HuoBiPro) GetOneOrder(orderId string, currencyPair CurrencyPair) (*Order, error) {
@@ -180,13 +159,9 @@ func (hbpro *HuoBiPro) GetOneOrder(orderId string, currencyPair CurrencyPair) (*
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (hbpro *HuoBiPro) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order, error) {
@@ -194,13 +169,9 @@ func (hbpro *HuoBiPro) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order, er
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
-	order := []Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	orders := []Order{}
+	err = copier.Copy(orders, goexOrder)
+	return orders, err
 }
 
 func (hbpro *HuoBiPro) CancelOrder(orderId string, currencyPair CurrencyPair) (bool, error) {
@@ -208,18 +179,14 @@ func (hbpro *HuoBiPro) CancelOrder(orderId string, currencyPair CurrencyPair) (b
 	return cancelresult, err
 }
 
-func (hbpro *HuoBiPro) GetOrderHistorys(currentPage, pageSize string,currency CurrencyPair) ([]Order, error) {
+func (hbpro *HuoBiPro) GetOrderHistorys(currentPage, pageSize string, currency CurrencyPair) ([]Order, error) {
 	goexOrder, err := hbpro.HuoBiPro.GetOrderHistorys(goex.NewCurrencyPair2(currency.ToSymbol("_")), ToInt(currentPage), ToInt(pageSize))
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
-	order := []Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	orders := []Order{}
+	err = copier.Copy(orders, goexOrder)
+	return orders, err
 }
 
 func (hbpro *HuoBiPro) GetTicker(currencyPair CurrencyPair) (*Ticker, error) {
@@ -227,13 +194,10 @@ func (hbpro *HuoBiPro) GetTicker(currencyPair CurrencyPair) (*Ticker, error) {
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexTicker)
 	ticker := &Ticker{}
-	err = json.Unmarshal(goexjson, ticker)
-	if err != nil {
-		return nil, err
-	}
-	return ticker, nil
+	err = copier.Copy(ticker, goexTicker)
+
+	return ticker, err
 }
 
 func (hbpro *HuoBiPro) GetDepth(size string, currencyPair CurrencyPair) (*Depth, error) {
@@ -241,15 +205,11 @@ func (hbpro *HuoBiPro) GetDepth(size string, currencyPair CurrencyPair) (*Depth,
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexDepth)
-	depth := &Depth{}
 
-	err = json.Unmarshal(goexjson, depth)
-	if err != nil {
-		return nil, err
-	}
-	depth.Pair=currencyPair
-	return depth, nil
+	depth := &Depth{}
+	err = copier.Copy(depth, goexDepth)
+
+	return depth, err
 }
 
 func (hbpro *HuoBiPro) GetKlineRecords(period, size, since string, currencyPair CurrencyPair) ([]Kline, error) {
@@ -318,13 +278,14 @@ func (hbpro *HuoBiPro) GetKlineRecords(period, size, since string, currencyPair 
 }
 
 //非个人，整个交易所的交易记录
-func (hbpro *HuoBiPro) GetTrades(since string, currencyPair CurrencyPair, ) ([]Trade, error) {
+func (hbpro *HuoBiPro) GetTrades(since string, currencyPair CurrencyPair) ([]Trade, error) {
 	panic("not implement")
 }
 
 func (hbpro *HuoBiPro) GetExchangeName() (string, error) {
 	return hbpro.HuoBiPro.GetExchangeName(), nil
 }
+
 //
 //func (hbpro *HuoBiPro) GetTickerWithWs(currencyPair CurrencyPair, handle func(ticker *Ticker)) error {
 //	goexHandler := func(goexTicker *goex.Ticker) {
@@ -358,7 +319,6 @@ func (hbpro *HuoBiPro) GetExchangeName() (string, error) {
 //
 //}
 
-
 func (hbpro *HuoBiPro) GetTickerWithWs(pair CurrencyPair, handle func(ticker *Ticker)) error {
 
 	hbpro.createWsConn()
@@ -368,7 +328,7 @@ func (hbpro *HuoBiPro) GetTickerWithWs(pair CurrencyPair, handle func(ticker *Ti
 		"id":  1,
 		"sub": sub})
 }
-func (hbpro *HuoBiPro) CloseWs(){
+func (hbpro *HuoBiPro) CloseWs() {
 	hbpro.ws.CloseWs()
 }
 
@@ -380,7 +340,6 @@ func (hbpro *HuoBiPro) GetDepthWithWs(pair CurrencyPair, handle func(dep *Depth)
 		"id":  2,
 		"sub": sub})
 }
-
 
 func (hbpro *HuoBiPro) createWsConn() {
 	if hbpro.ws == nil {
@@ -430,9 +389,9 @@ func (hbpro *HuoBiPro) createWsConn() {
 				}
 				tick := datamap["tick"].(map[string]interface{})
 				//depth
-				if strings.Contains(ch,"depth"){
-					for pair,function := range hbpro.wsDepthHandleMap{
-						if strings.Contains(ch,strings.ToLower(pair.ToSymbol(""))){
+				if strings.Contains(ch, "depth") {
+					for pair, function := range hbpro.wsDepthHandleMap {
+						if strings.Contains(ch, strings.ToLower(pair.ToSymbol(""))) {
 							depth := hbpro.parseDepthData(tick)
 							depth.Pair = pair
 							depth.Exchange = "huobi.pro"
@@ -441,7 +400,6 @@ func (hbpro *HuoBiPro) createWsConn() {
 					}
 				}
 				//todo: tick事件等
-
 
 				//log.Println(string(data))
 			})

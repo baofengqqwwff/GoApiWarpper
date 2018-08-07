@@ -1,21 +1,21 @@
 package binance_warpper
 
 import (
-	"encoding/json"
-	"github.com/nntaoli-project/GoEx/binance"
-	"net/http"
-	"github.com/nntaoli-project/GoEx"
-	. "github.com/baofengqqwwff/GoApiWarpper"
-	"sync"
-	"net/url"
-	"log"
-	"strconv"
 	"errors"
-	"time"
-	"strings"
 	"fmt"
+	. "github.com/baofengqqwwff/GoApiWarpper"
 	"github.com/bitly/go-simplejson"
 	"github.com/gorilla/websocket"
+	"github.com/jinzhu/copier"
+	"github.com/nntaoli-project/GoEx"
+	"github.com/nntaoli-project/GoEx/binance"
+	"log"
+	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
 )
 
 type BinanceWarpper struct {
@@ -44,13 +44,10 @@ func (bn *BinanceWarpper) GetTicker(currencyPair CurrencyPair) (*Ticker, error) 
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexTicker)
 	ticker := &Ticker{}
-	err = json.Unmarshal(goexjson, ticker)
-	if err != nil {
-		return nil, err
-	}
-	return ticker, nil
+	err = copier.Copy(ticker, goexTicker)
+
+	return ticker, err
 }
 
 func (bn *BinanceWarpper) GetDepth(size string, currencyPair CurrencyPair) (*Depth, error) {
@@ -58,13 +55,10 @@ func (bn *BinanceWarpper) GetDepth(size string, currencyPair CurrencyPair) (*Dep
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexDepth)
+
 	depth := &Depth{}
-	err = json.Unmarshal(goexjson, depth)
-	if err != nil {
-		return nil, err
-	}
-	return depth, nil
+	err = copier.Copy(depth, goexDepth)
+	return depth, err
 }
 
 func (bn *BinanceWarpper) GetAccount() (*Account, error) {
@@ -72,13 +66,10 @@ func (bn *BinanceWarpper) GetAccount() (*Account, error) {
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexAccount)
+
 	account := &Account{}
-	err = json.Unmarshal(goexjson, account)
-	if err != nil {
-		return nil, err
-	}
-	return account, nil
+	err = copier.Copy(account, goexAccount)
+	return account, err
 }
 
 func (bn *BinanceWarpper) LimitBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -86,13 +77,10 @@ func (bn *BinanceWarpper) LimitBuy(amount, price string, currencyPair CurrencyPa
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
+
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (bn *BinanceWarpper) LimitSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -100,13 +88,10 @@ func (bn *BinanceWarpper) LimitSell(amount, price string, currencyPair CurrencyP
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
+
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (bn *BinanceWarpper) MarketBuy(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -114,13 +99,9 @@ func (bn *BinanceWarpper) MarketBuy(amount, price string, currencyPair CurrencyP
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (bn *BinanceWarpper) MarketSell(amount, price string, currencyPair CurrencyPair) (*Order, error) {
@@ -128,13 +109,9 @@ func (bn *BinanceWarpper) MarketSell(amount, price string, currencyPair Currency
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (bn *BinanceWarpper) CancelOrder(orderId string, currencyPair CurrencyPair) (bool, error) {
@@ -147,13 +124,9 @@ func (bn *BinanceWarpper) GetOneOrder(orderId string, currencyPair CurrencyPair)
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrder)
 	order := &Order{}
-	err = json.Unmarshal(goexjson, order)
-	if err != nil {
-		return nil, err
-	}
-	return order, nil
+	err = copier.Copy(order, goexOrder)
+	return order, err
 }
 
 func (bn *BinanceWarpper) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order, error) {
@@ -161,13 +134,9 @@ func (bn *BinanceWarpper) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order,
 	if err != nil {
 		return nil, err
 	}
-	goexjson, _ := json.Marshal(goexOrders)
 	orders := []Order{}
-	err = json.Unmarshal(goexjson, orders)
-	if err != nil {
-		return nil, err
-	}
-	return orders, nil
+	err = copier.Copy(orders, goexOrders)
+	return orders, err
 }
 
 func (bn *BinanceWarpper) GetSymbols() ([]CurrencyPair, error) {
@@ -447,7 +416,7 @@ func (bn *BinanceWarpper) createWsConn(endpoint string) {
 		if bn.ws == nil {
 			bn.ws = NewWsConn(endpoint)
 			bn.ws.ReConnect()
-			keepAlive(bn.ws,10*time.Second)
+			keepAlive(bn.ws, 10*time.Second)
 
 		}
 	}

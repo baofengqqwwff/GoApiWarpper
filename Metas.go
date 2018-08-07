@@ -36,10 +36,10 @@ type SubAccount struct {
 }
 
 type Account struct {
-	Exchange    string
-	Asset       float64 //总资产
-	NetAsset    float64 //净资产
-	SubAccounts map[Currency]SubAccount
+	Exchange    string                  `json:Exchange`
+	Asset       float64                 `json:Asset`    //总资产 `
+	NetAsset    float64                 `json:NewAsset` //净资产
+	SubAccounts map[Currency]SubAccount `json:SubAccounts`
 }
 
 type Ticker struct {
@@ -74,7 +74,7 @@ func (dr DepthRecords) Less(i, j int) bool {
 }
 
 type Depth struct {
-	Exchange string
+	Exchange     string
 	ContractType string //for future
 	Pair         CurrencyPair
 	UTime        time.Time
@@ -90,10 +90,10 @@ type APIConfig struct {
 }
 
 type Kline struct {
-	Exchange string
-	Pair         CurrencyPair
-	Period       string
-	Timestamp    int64
+	Exchange  string
+	Pair      CurrencyPair
+	Period    string
+	Timestamp int64
 	Open,
 	Close,
 	High,
