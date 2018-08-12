@@ -19,6 +19,7 @@ import (
 )
 
 type BinanceWarpper struct {
+	httpClient *http.Client
 	*binance.Binance
 	ws                *WsConn
 	createWsLock      sync.Mutex
@@ -31,6 +32,7 @@ func New(client *http.Client, api_key, secret_key string) *BinanceWarpper {
 	binanceWarpper.wsTickerHandleMap = map[CurrencyPair]func(*Ticker){}
 	binanceWarpper.wsDepthHandleMap = map[CurrencyPair]func(*Depth){}
 	binanceWarpper.Binance = binance.New(client, api_key, secret_key)
+	binanceWarpper.httpClient = client
 	return binanceWarpper
 }
 
@@ -141,7 +143,7 @@ func (bn *BinanceWarpper) GetUnfinishOrders(currencyPair CurrencyPair) ([]Order,
 
 func (bn *BinanceWarpper) GetSymbols() ([]CurrencyPair, error) {
 	exchangeInfoUri := "https://api.binance.com/api/v1/exchangeInfo"
-	bodyDataMap, err := HttpGet(http.DefaultClient, exchangeInfoUri)
+	bodyDataMap, err := HttpGet(bn.httpClient, exchangeInfoUri)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +207,7 @@ func (bn *BinanceWarpper) GetKlineRecords(period, size, since string, currencyPa
 		return nil, errors.New("do not have this period")
 	}
 	path := klineUri + params.Encode()
-	respList, err := HttpGet3(http.DefaultClient, path, map[string]string{"X-MBX-APIKEY": ""})
+	respList, err := HttpGet3(bn.httpClient, path, map[string]string{"X-MBX-APIKEY": ""})
 	if err != nil {
 		log.Println(err)
 		return nil, err

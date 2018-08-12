@@ -38,6 +38,7 @@ type HuoBiPro struct {
 	createWsLock      sync.Mutex
 	wsTickerHandleMap map[CurrencyPair]func(*Ticker)
 	wsDepthHandleMap  map[CurrencyPair]func(*Depth)
+	httpClient        *http.Client
 }
 
 func NewHuoBiPro(client *http.Client, apikey, secretkey, accountId string) *HuoBiPro {
@@ -45,7 +46,7 @@ func NewHuoBiPro(client *http.Client, apikey, secretkey, accountId string) *HuoB
 	hbpro.wsDepthHandleMap = make(map[CurrencyPair]func(*Depth))
 	hbpro.wsTickerHandleMap = make(map[CurrencyPair]func(*Ticker))
 	hbpro.HuoBiPro = huobi.NewHuoBiPro(client, apikey, secretkey, accountId)
-
+	hbpro.httpClient = client
 	return hbpro
 }
 
@@ -75,7 +76,7 @@ func NewHuoBiProPoint(client *http.Client, apikey, secretkey string) *HuoBiPro {
 }
 
 func (hbpro *HuoBiPro) GetSymbols() ([]CurrencyPair, error) {
-	symbolMapInterface, err := HttpGet2(http.DefaultClient, "https://api.huobipro.com/v1/common/symbols", nil)
+	symbolMapInterface, err := HttpGet2(hbpro.httpClient, "https://api.huobipro.com/v1/common/symbols", nil)
 	if err != nil {
 		log.Println(err)
 		return nil, err
@@ -246,7 +247,7 @@ func (hbpro *HuoBiPro) GetKlineRecords(period, size, since string, currencyPair 
 		log.Println("please notice that since is not been used")
 	}
 
-	klineMapInterface, err := HttpGet2(http.DefaultClient, "https://api.huobipro.com/market/history/kline?"+v.Encode(), nil)
+	klineMapInterface, err := HttpGet2(hbpro.httpClient, "https://api.huobipro.com/market/history/kline?"+v.Encode(), nil)
 	if err != nil {
 		log.Println(err)
 		return nil, err
