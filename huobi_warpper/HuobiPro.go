@@ -118,8 +118,10 @@ func (hbpro *HuoBiPro) LimitBuy(amount, price string, currencyPair CurrencyPair)
 	if err != nil {
 		return nil, err
 	}
+
 	order := &Order{}
 	err = copier.Copy(order, goexOrder)
+	order.Exchange = HUOBI_PRO
 	return order, err
 }
 
@@ -131,6 +133,8 @@ func (hbpro *HuoBiPro) LimitSell(amount, price string, currencyPair CurrencyPair
 
 	order := &Order{}
 	err = copier.Copy(order, goexOrder)
+	order.Exchange = HUOBI_PRO
+	log.Println(order)
 	return order, err
 }
 
@@ -141,6 +145,8 @@ func (hbpro *HuoBiPro) MarketBuy(amount, price string, currencyPair CurrencyPair
 	}
 	order := &Order{}
 	err = copier.Copy(order, goexOrder)
+	order.Exchange = HUOBI_PRO
+
 	return order, err
 }
 
@@ -151,6 +157,8 @@ func (hbpro *HuoBiPro) MarketSell(amount, price string, currencyPair CurrencyPai
 	}
 	order := &Order{}
 	err = copier.Copy(order, goexOrder)
+	order.Exchange = HUOBI_PRO
+
 	return order, err
 }
 
@@ -161,6 +169,8 @@ func (hbpro *HuoBiPro) GetOneOrder(orderId string, currencyPair CurrencyPair) (*
 	}
 	order := &Order{}
 	err = copier.Copy(order, goexOrder)
+	order.Exchange = HUOBI_PRO
+
 	return order, err
 }
 
