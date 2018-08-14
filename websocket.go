@@ -18,7 +18,7 @@ type WsConn struct {
 }
 
 const (
-	SUB_TICKER      = 1 + iota
+	SUB_TICKER = 1 + iota
 	SUB_ORDERBOOK
 	SUB_KLINE_1M
 	SUB_KLINE_15M
@@ -29,6 +29,7 @@ const (
 )
 
 func NewWsConn(wsurl string) *WsConn {
+
 	wsConn, _, err := websocket.DefaultDialer.Dial(wsurl, nil)
 	if err != nil {
 		panic(err)
