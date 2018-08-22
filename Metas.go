@@ -16,7 +16,7 @@ type Order struct {
 	OrderID   int
 	OrderTime int
 	Status    TradeStatus
-	Currency  CurrencyPair
+	Pair      CurrencyPair
 	Side      TradeSide
 }
 
